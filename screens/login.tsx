@@ -3,15 +3,15 @@ import { ThemedText } from '@/components/ThemedText';
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
 import { useRouter } from 'expo-router';
-import { login, socialLogin } from '@/utils/api';
+import { login } from '@/utils/api';
 import { useAuth } from '@/contexts/auth';
-import * as WebBrowser from 'expo-web-browser';
-import * as Google from 'expo-auth-session/providers/google';
-import * as Facebook from 'expo-auth-session/providers/facebook';
-import { ResponseType } from 'expo-auth-session';
+import Constants from 'expo-constants';
 
-// Initialize WebBrowser
-WebBrowser.maybeCompleteAuthSession();
+// Get Google OAuth client IDs from app config
+const googleAndroidClientId = Constants.expoConfig?.extra?.googleAndroidClientId || '';
+const googleIosClientId = Constants.expoConfig?.extra?.googleIosClientId || '';
+const googleWebClientId = Constants.expoConfig?.extra?.googleWebClientId || '';
+const googleExpoClientId = Constants.expoConfig?.extra?.googleExpoClientId || '';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -23,24 +23,8 @@ export default function LoginScreen() {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  // Google Auth
-  const [googleRequest, googleResponse, promptGoogleAsync] = Google.useAuthRequest({
-    androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
-    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
-    webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
-    clientId: process.env.EXPO_PUBLIC_GOOGLE_EXPO_CLIENT_ID,
-    responseType: ResponseType.Token,
-  });
-
-  // Facebook Auth
-  const [fbRequest, fbResponse, promptFacebookAsync] = Facebook.useAuthRequest({
-    clientId: "YOUR_FACEBOOK_APP_ID",
-    responseType: ResponseType.Token,
-  });
-
   const handleBack = () => {
-    // Navigate to the tabs layout
-    router.push('/(tabs)');
+    router.replace('/(tabs)');
   };
 
   const handleLogin = async () => {
@@ -55,14 +39,17 @@ export default function LoginScreen() {
 
       const response = await login(emailOrUsername, password);
       
-      // First set the success message
-      setSuccessMessage('Login successful!');
-      
-      // Then sign in
+      // First store the tokens and sign in
       await signIn(response);
+      
+      // Set success message
+      setSuccessMessage('Login successful!');
 
-      // Navigate directly to profile tab
-      router.push('/(tabs)/profile');
+      // Add a small delay to ensure tokens are stored
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Then navigate
+      router.replace('/(tabs)/profile');
 
     } catch (err) {
       console.error('Login error:', err);
@@ -76,105 +63,33 @@ export default function LoginScreen() {
     }
   };
 
-  const handleGoogleLogin = async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-
-      const response = await promptGoogleAsync();
-      
-      if (response?.type === 'success') {
-        const { access_token } = response.params;
-        
-        // Send token to your backend
-        const result = await socialLogin('google', access_token);
-        
-        // First set success message
-        setSuccessMessage('Successfully logged in with Google');
-        
-        // Then sign in
-        await signIn(result);
-
-        // Navigate directly to profile tab
-        router.push('/(tabs)/profile');
-      }
-    } catch (error) {
-      console.error('Google login error:', error);
-      setError(error instanceof Error ? error.message : 'Google login failed');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleFacebookLogin = async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-
-      const response = await promptFacebookAsync();
-      
-      if (response?.type === 'success') {
-        const { access_token } = response.params;
-        
-        // Send token to your backend
-        const result = await socialLogin('facebook', access_token);
-        
-        // First set success message
-        setSuccessMessage('Successfully logged in with Facebook');
-        
-        // Then sign in
-        await signIn(result);
-
-        // Navigate directly to profile tab
-        router.push('/(tabs)/profile');
-      }
-    } catch (error) {
-      console.error('Facebook login error:', error);
-      setError(error instanceof Error ? error.message : 'Facebook login failed');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const isFormValid = emailOrUsername.trim() !== '' && password.trim() !== '';
 
   return (
     <SafeAreaView style={styles.container}>
-      <TouchableOpacity 
-        style={styles.backButton}
-        onPress={handleBack}
-      >
-        <Ionicons name="arrow-back" size={24} color="#000" />
-      </TouchableOpacity>
-
       <View style={styles.content}>
-        <ThemedText style={styles.title}>Sign In</ThemedText>
-        <ThemedText style={styles.subtitle}>Hi! Welcome back, you've been missed</ThemedText>
+        <TouchableOpacity onPress={handleBack} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color="#1A1A1A" />
+        </TouchableOpacity>
 
-        {/* Show error message if exists */}
-        {error && (
-          <View style={styles.messageContainer}>
-            <ThemedText style={styles.errorText}>{error}</ThemedText>
+        <View style={styles.header}>
+          <View style={styles.titleContainer}>
+            <ThemedText style={styles.title}>Welcome Back!</ThemedText>
+            <ThemedText style={styles.subtitle}>Sign in to continue</ThemedText>
           </View>
-        )}
-
-        {/* Show success message if exists */}
-        {successMessage && (
-          <View style={styles.messageContainer}>
-            <ThemedText style={styles.successText}>{successMessage}</ThemedText>
-          </View>
-        )}
+        </View>
 
         <View style={styles.form}>
           <View style={styles.inputContainer}>
             <ThemedText style={styles.label}>Email or Username</ThemedText>
             <TextInput
-              style={styles.input}
-              placeholder="Enter your email or username"
-              placeholderTextColor="#999"
-              autoCapitalize="none"
+              style={[styles.input, emailOrUsername.length > 0 && styles.inputFilled]}
               value={emailOrUsername}
               onChangeText={setEmailOrUsername}
+              placeholder="Enter your email or username"
+              autoCapitalize="none"
+              keyboardType="email-address"
+              placeholderTextColor="#999"
             />
           </View>
 
@@ -182,32 +97,25 @@ export default function LoginScreen() {
             <ThemedText style={styles.label}>Password</ThemedText>
             <View style={styles.passwordContainer}>
               <TextInput
-                style={[styles.input, styles.passwordInput]}
-                placeholder="••••••••••••••"
-                placeholderTextColor="#999"
-                secureTextEntry={!showPassword}
+                style={[styles.input, styles.passwordInput, password.length > 0 && styles.inputFilled]}
                 value={password}
                 onChangeText={setPassword}
+                placeholder="Enter your password"
+                secureTextEntry={!showPassword}
+                placeholderTextColor="#999"
               />
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.eyeIcon}
                 onPress={() => setShowPassword(!showPassword)}
               >
-                <Ionicons 
-                  name={showPassword ? "eye-off-outline" : "eye-outline"} 
-                  size={24} 
-                  color="#666" 
+                <Ionicons
+                  name={showPassword ? 'eye-off' : 'eye'}
+                  size={24}
+                  color="#666"
                 />
               </TouchableOpacity>
             </View>
           </View>
-
-          <TouchableOpacity 
-            style={styles.forgotPassword}
-            onPress={() => router.push('/(auth)/forgot-password')}
-          >
-            <ThemedText style={styles.forgotPasswordText}>Forgot Password?</ThemedText>
-          </TouchableOpacity>
 
           <TouchableOpacity 
             style={[
@@ -224,29 +132,6 @@ export default function LoginScreen() {
             )}
           </TouchableOpacity>
 
-          <ThemedText style={styles.orText}>Or sign in with</ThemedText>
-
-          <View style={styles.socialButtons}>
-            <TouchableOpacity 
-              style={styles.socialButton}
-              onPress={handleGoogleLogin}
-              disabled={isLoading}
-            >
-              <View style={styles.socialIconContainer}>
-                <Ionicons name="logo-google" size={24} color="#DB4437" />
-              </View>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.socialButton}
-              onPress={handleFacebookLogin}
-              disabled={isLoading}
-            >
-              <View style={styles.socialIconContainer}>
-                <Ionicons name="logo-facebook" size={24} color="#4267B2" />
-              </View>
-            </TouchableOpacity>
-          </View>
-
           <View style={styles.signUpContainer}>
             <ThemedText style={styles.signUpText}>Don't have an account? </ThemedText>
             <TouchableOpacity onPress={() => router.push('/(auth)/sign-up')}>
@@ -254,7 +139,10 @@ export default function LoginScreen() {
             </TouchableOpacity>
           </View>
 
-          <TouchableOpacity onPress={() => router.push('/(auth)/terms')}>
+          <TouchableOpacity 
+            style={styles.termsContainer}
+            onPress={() => router.push('/(auth)/terms')}
+          >
             <ThemedText style={styles.termsLink}>Terms & Condition</ThemedText>
           </TouchableOpacity>
         </View>
@@ -268,48 +156,62 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#fff',
   },
-  backButton: {
-    padding: 16,
-    position: 'absolute',
-    top: 8,
-    left: 8,
-    zIndex: 1,
-  },
   content: {
     flex: 1,
     padding: 24,
+    paddingTop: 12,
+  },
+  backButton: {
+    marginBottom: 32,
+    width: 40,
+    height: 40,
     justifyContent: 'center',
+    alignItems: 'flex-start',
+  },
+  header: {
+    marginBottom: 40,
+    paddingHorizontal: 4,
+  },
+  titleContainer: {
+    gap: 8,
   },
   title: {
-    fontSize: 28,
-    fontWeight: '600',
-    marginBottom: 8,
-    marginTop: 20,
-    paddingTop: 20,
-    textAlign: 'center',
+    fontSize: 34,
+    fontFamily: 'PoppinsBold',
+    color: '#1A1A1A',
+    lineHeight: 44,
   },
   subtitle: {
     fontSize: 16,
     color: '#666',
-    marginBottom: 32,
-    textAlign: 'center',
+    fontFamily: 'PoppinsRegular',
+    lineHeight: 24,
   },
   form: {
-    gap: 16,
+    flex: 1,
   },
   inputContainer: {
-    gap: 8,
+    marginBottom: 24,
   },
   label: {
-    fontSize: 16,
-    color: '#333',
+    fontSize: 14,
+    marginBottom: 8,
+    fontFamily: 'PoppinsMedium',
+    color: '#1A1A1A',
   },
   input: {
-    height: 48,
-    backgroundColor: '#F5F5F5',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
     borderRadius: 12,
-    paddingHorizontal: 16,
+    padding: 16,
     fontSize: 16,
+    fontFamily: 'PoppinsRegular',
+    backgroundColor: '#F9FAFB',
+    color: '#1A1A1A',
+  },
+  inputFilled: {
+    backgroundColor: '#fff',
+    borderColor: '#6B4EFF',
   },
   passwordContainer: {
     position: 'relative',
@@ -320,97 +222,58 @@ const styles = StyleSheet.create({
   eyeIcon: {
     position: 'absolute',
     right: 16,
-    top: 12,
-  },
-  forgotPassword: {
-    alignSelf: 'flex-end',
-  },
-  forgotPasswordText: {
-    color: '#6B4EFF',
-    fontSize: 14,
+    top: '50%',
+    transform: [{ translateY: -12 }],
   },
   signInButton: {
     backgroundColor: '#6B4EFF',
-    height: 48,
+    padding: 16,
     borderRadius: 12,
-    justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: 32,
+    shadowColor: '#6B4EFF',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
   },
   signInButtonDisabled: {
-    backgroundColor: '#E0E0E0',
+    backgroundColor: '#A5A6F6',
+    shadowOpacity: 0,
+    elevation: 0,
   },
   signInButtonText: {
     color: '#fff',
     fontSize: 16,
-    fontWeight: '600',
-  },
-  orText: {
-    textAlign: 'center',
-    color: '#666',
-    marginVertical: 16,
-  },
-  socialButtons: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 16,
-    marginBottom: 24,
-  },
-  socialButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    justifyContent: 'center',
-    alignItems: 'center',
+    fontFamily: 'PoppinsSemiBold',
   },
   signUpContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
+    marginTop: 24,
   },
   signUpText: {
-    color: '#666',
     fontSize: 14,
+    color: '#666',
+    fontFamily: 'PoppinsRegular',
   },
   signUpLink: {
-    color: '#6B4EFF',
     fontSize: 14,
-    fontWeight: '600',
+    color: '#6B4EFF',
+    fontFamily: 'PoppinsSemiBold',
+  },
+  termsContainer: {
+    marginTop: 16,
+    alignItems: 'center',
   },
   termsLink: {
     color: '#6B4EFF',
     fontSize: 14,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  messageContainer: {
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-    width: '100%',
-  },
-  errorText: {
-    color: '#DC2626',
-    fontSize: 14,
-    textAlign: 'center',
-    backgroundColor: '#FEE2E2',
-    padding: 8,
-    borderRadius: 8,
-  },
-  successText: {
-    color: '#059669',
-    fontSize: 14,
-    textAlign: 'center',
-    backgroundColor: '#D1FAE5',
-    padding: 8,
-    borderRadius: 8,
-  },
-  socialIconContainer: {
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
+    fontFamily: 'PoppinsRegular',
+    textDecorationLine: 'underline',
   },
 }); 

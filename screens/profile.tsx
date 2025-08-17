@@ -58,86 +58,61 @@ const OWNER_MENU_ITEM = {
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { user: authUser, signOut, isLoading: authLoading } = useAuth();
+  const { user: authUser, signOut } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
   const [user, setUser] = useState<User | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [isMounted, setIsMounted] = useState(false);
-  const [isSigningOut, setIsSigningOut] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
-    setIsMounted(true);
-    return () => setIsMounted(false);
-  }, []);
-
-  useEffect(() => {
-    if (!isMounted) return;
-
-    // Don't make API calls if we're signing out
-    if (isSigningOut) return;
-
-    if (!authLoading && !authUser) {
-      router.replace('/(auth)/login');
+    if (!authUser) {
       return;
     }
-
-    if (authUser) {
-      loadProfile();
-    }
-  }, [authUser, authLoading, isMounted, isSigningOut]);
+    loadProfile();
+  }, [authUser]);
 
   const loadProfile = async () => {
-    // Don't load profile if we're signing out
-    if (isSigningOut || !isMounted) return;
+    if (!authUser) return;
     
     try {
       setIsLoading(true);
       const response = await getProfile();
-      if (isMounted && !isSigningOut) {
+      if (response?.user) {
         setUser(response.user);
         setError(null);
+      } else {
+        throw new Error('No user data received');
       }
     } catch (error) {
-      if (isMounted && !isSigningOut) {
-        setError('Failed to load profile');
-        Alert.alert('Error', 'Failed to load profile. Please try again.');
-      }
+      console.error('Profile loading error:', error);
+      setError('Failed to load profile');
+      setUser(null);
     } finally {
-      if (isMounted && !isSigningOut) {
-        setIsLoading(false);
-      }
+      setIsLoading(false);
+      setRefreshing(false);
     }
   };
 
   const handleSignOut = async () => {
     try {
-      setIsSigningOut(true);
-      // Clear local state first
-      setUser(null);
-      setError(null);
-      // Then sign out which will clear the tokens
       await signOut();
-      if (isMounted) {
-        router.replace('/(auth)/login');
-      }
+      router.replace('/(auth)/login');
     } catch (error) {
       console.error('Sign out error:', error);
-      if (isMounted) {
-        Alert.alert('Error', 'Failed to sign out. Please try again.');
-      }
-    } finally {
-      if (isMounted) {
-        setIsSigningOut(false);
-      }
+      Alert.alert('Error', 'Failed to sign out. Please try again.');
     }
   };
 
-  // If we're signing out or already signed out, don't show any loading states
-  if (isSigningOut || !authUser) {
-    return <Redirect href="/(auth)/login" />;
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadProfile();
+  };
+
+  if (!authUser) {
+    return null;
   }
 
-  if (authLoading) {
+  if (isLoading && !refreshing) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
@@ -147,17 +122,7 @@ export default function ProfileScreen() {
     );
   }
 
-  if (isLoading) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#6B4EFF" />
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (error) {
+  if (error && !user) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.errorContainer}>
@@ -173,148 +138,93 @@ export default function ProfileScreen() {
     );
   }
 
-  if (!user) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.emptyContainer}>
-          <ThemedText style={styles.emptyText}>No profile data available</ThemedText>
-          <TouchableOpacity 
-            style={styles.retryButton}
-            onPress={loadProfile}
-          >
-            <ThemedText style={styles.retryButtonText}>Refresh</ThemedText>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  const MENU_ITEMS = user.user_type === 'OWNER' 
+  const displayUser = user || authUser;
+  const MENU_ITEMS = displayUser.user_type === 'OWNER' 
     ? [OWNER_MENU_ITEM, ...BASE_MENU_ITEMS]
     : BASE_MENU_ITEMS;
 
   const handleMenuPress = (id: typeof MENU_ITEMS[number]['id']) => {
     switch (id) {
       case 'profile':
-        router.push('/edit-profile');
-        break;
-      case 'settings':
-        router.push('/settings');
-        break;
-      case 'language':
-        router.push('/language');
-        break;
-      case 'help':
-        router.push('/help');
-        break;
-      case 'invites':
-        router.push('/invite-friends');
+        router.push('/(modals)/edit-profile' as any);
         break;
       case 'orders':
-        router.push('/my-orders');
+        router.push('/(modals)/my-orders' as any);
+        break;
+      case 'settings':
+        router.push('/(modals)/settings' as any);
+        break;
+      case 'help':
+        router.push('/(modals)/help' as any);
+        break;
+      case 'language':
+        router.push('/(modals)/language' as any);
+        break;
+      case 'invites':
+        router.push('/(modals)/invite-friends' as any);
         break;
       case 'manage-restaurants':
-        router.push('/manage-restaurants' as any);
+        router.push('/(modals)/restaurant-profile' as any);
         break;
     }
   };
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
-          <Ionicons name="arrow-back" size={24} color="#000" />
-        </TouchableOpacity>
-        <ThemedText style={styles.headerTitle}>Profile</ThemedText>
-        <View style={styles.headerRight} />
-      </View>
-
-      <ScrollView 
-        style={styles.content}
+      <ScrollView
+        style={styles.scrollView}
         refreshControl={
-          <RefreshControl 
-            refreshing={isLoading} 
-            onRefresh={loadProfile}
-            tintColor="#6B4EFF"
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={['#6B4EFF']}
           />
         }
       >
-        <View style={styles.profileSection}>
-          <View style={styles.profileImageContainer}>
-            {user.profile_picture ? (
-              <Image 
-                source={{ uri: getMediaUrl(user.profile_picture) }}
-                style={styles.profileImage}
-                onError={(e) => {
-                  console.error('Profile image load error:', e.nativeEvent.error);
-                  // When image fails to load, show placeholder
-                  const img = e.target as any;
-                  if (img) {
-                    img.onerror = null; // Prevent infinite error loop
-                  }
-                }}
-                defaultSource={{ uri: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=' }}
-              />
-            ) : (
-              <View style={[styles.profileImage, styles.profileImagePlaceholder]}>
-                <Ionicons name="person" size={40} color="#999" />
-              </View>
-            )}
-            <TouchableOpacity 
-              style={styles.editButton}
-              onPress={() => router.push('/edit-profile')}
-            >
-              <View style={styles.iconContainer}>
-                <Ionicons name="pencil" size={20} color="#fff" />
-              </View>
-            </TouchableOpacity>
+        <View style={styles.header}>
+          <View style={styles.profileInfo}>
+            <Image
+              source={
+                displayUser.profile_picture
+                  ? { uri: getMediaUrl(displayUser.profile_picture) }
+                  : require('@/assets/images/default-avatar.jpg')
+              }
+              style={styles.avatar}
+            />
+            <View style={styles.userInfo}>
+              <ThemedText style={styles.name}>
+                {displayUser.first_name
+                  ? `${displayUser.first_name} ${displayUser.last_name || ''}`
+                  : displayUser.username}
+              </ThemedText>
+              <ThemedText style={styles.email}>{displayUser.email}</ThemedText>
+            </View>
           </View>
-          <ThemedText style={styles.userName}>
-            {user.first_name && user.last_name 
-              ? `${user.first_name} ${user.last_name}`
-              : user.username}
-          </ThemedText>
-          <ThemedText style={styles.userEmail}>{user.email}</ThemedText>
-          {user.phone_number && (
-            <ThemedText style={styles.userPhone}>{user.phone_number}</ThemedText>
-          )}
         </View>
 
         <View style={styles.menuContainer}>
           {MENU_ITEMS.map((item) => (
-            <TouchableOpacity 
-              key={item.id} 
+            <TouchableOpacity
+              key={item.id}
               style={styles.menuItem}
               onPress={() => handleMenuPress(item.id)}
             >
-              <View style={styles.menuItemLeft}>
-                <View style={[styles.iconContainer, { backgroundColor: `${item.color}15` }]}>
-                  <Ionicons name={item.icon} size={20} color={item.color} />
+              <View style={styles.menuItemContent}>
+                <View style={[styles.menuIcon, { backgroundColor: item.color + '10' }]}>
+                  <Ionicons name={item.icon as any} size={24} color={item.color} />
                 </View>
-                <ThemedText style={styles.menuItemTitle}>
-                  {item.title}
-                </ThemedText>
+                <ThemedText style={styles.menuTitle}>{item.title}</ThemedText>
               </View>
-              <View style={styles.menuItemRight}>
-                <View style={styles.chevronContainer}>
-                  <Ionicons name="chevron-forward" size={20} color="#666" />
-                </View>
-              </View>
+              <Ionicons name="chevron-forward" size={24} color="#666" />
             </TouchableOpacity>
           ))}
         </View>
 
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.signOutButton}
           onPress={handleSignOut}
         >
-          <View style={styles.signOutContent}>
-            <Ionicons name="log-out-outline" size={24} color="#DC2626" />
-            <ThemedText style={styles.signOutText}>Sign Out</ThemedText>
-          </View>
+          <ThemedText style={styles.signOutText}>Sign Out</ThemedText>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
@@ -326,166 +236,106 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#fff',
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-  },
-  backButton: {
-    padding: 8,
-    marginLeft: -8,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+  scrollView: {
     flex: 1,
-    textAlign: 'center',
-  },
-  headerRight: {
-    width: 40, // Same width as back button for alignment
-  },
-  content: {
-    flex: 1,
-  },
-  profileSection: {
-    alignItems: 'center',
-    paddingVertical: 24,
-  },
-  profileImageContainer: {
-    position: 'relative',
-    marginBottom: 16,
-  },
-  profileImage: {
-    width: width * 0.25,
-    height: width * 0.25,
-    borderRadius: (width * 0.25) / 2,
-  },
-  profileImagePlaceholder: {
-    backgroundColor: '#E5E7EB',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  editButton: {
-    position: 'absolute',
-    right: 0,
-    bottom: 0,
-  },
-  iconContainer: {
-    backgroundColor: '#6B4EFF',
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#fff',
-  },
-  userName: {
-    fontSize: 20,
-    fontWeight: '600',
-  },
-  userEmail: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 4,
-  },
-  userPhone: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 4,
-  },
-  menuContainer: {
-    paddingHorizontal: 16,
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-  },
-  menuItemLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  menuItemTitle: {
-    fontSize: 16,
-    marginLeft: 12,
-    color: '#333',
-  },
-  menuItemRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  chevronContainer: {
-    width: 24,
-    height: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  signOutButton: {
-    paddingVertical: 16,
-    marginTop: 24,
-    marginHorizontal: 16,
-    marginBottom: 32,
-    borderRadius: 12,
-    backgroundColor: '#FEE2E2',
-  },
-  signOutContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  signOutText: {
-    color: '#DC2626',
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
+  header: {
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  profileInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  avatar: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    marginRight: 16,
+  },
+  userInfo: {
+    flex: 1,
+  },
+  name: {
+    fontSize: 20,
+    fontFamily: 'Poppins-Bold',
+    marginBottom: 4,
+  },
+  email: {
+    fontSize: 14,
+    color: '#666',
+    fontFamily: 'Poppins-Regular',
+  },
+  menuContainer: {
+    paddingVertical: 12,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  menuItemContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  menuIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  menuTitle: {
+    fontSize: 16,
+    fontFamily: 'Poppins-Medium',
+  },
+  signOutButton: {
+    marginTop: 20,
+    marginBottom: 40,
+    marginHorizontal: 20,
+    padding: 16,
+    backgroundColor: '#FF5B5B',
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  signOutText: {
+    color: '#fff',
+    fontSize: 16,
+    fontFamily: 'Poppins-Medium',
+  },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 16,
+    padding: 20,
   },
   errorText: {
     fontSize: 16,
-    color: '#DC2626',
+    color: '#FF5B5B',
     textAlign: 'center',
     marginBottom: 16,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 16,
-  },
-  emptyText: {
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
-    marginBottom: 16,
+    fontFamily: 'Poppins-Regular',
   },
   retryButton: {
     backgroundColor: '#6B4EFF',
-    paddingHorizontal: 24,
     paddingVertical: 12,
-    borderRadius: 8,
+    paddingHorizontal: 24,
+    borderRadius: 12,
   },
   retryButtonText: {
     color: '#fff',
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'Poppins-Medium',
   },
 }); 

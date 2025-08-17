@@ -1,4 +1,5 @@
 import { View, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Image, TextInput } from 'react-native';
+import { OptimizedImage } from '@/components/images/OptimizedImage';
 import { ThemedText } from '@/components/ThemedText';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -202,9 +203,14 @@ export default function SpecialOffersScreen() {
                 </TouchableOpacity>
               </View>
               <View style={styles.imageContainer}>
-                <Image 
+                <OptimizedImage 
                   source={{ uri: offer.image }} 
+                  width="100%"
+                  height="100%"
                   style={styles.offerImage}
+                  contentFit="cover"
+                  fallbackIcon="restaurant"
+                  alt={`${offer.title} offer image`}
                 />
               </View>
             </View>

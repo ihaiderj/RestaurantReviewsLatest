@@ -285,11 +285,14 @@ function MyOrdersScreen() {
                   style={styles.writeReviewButton}
                   onPress={() => {
                     router.push({
-                      pathname: '/write-review',
+                      pathname: '/(modals)/write-review',
                       params: {
-                        restaurantId: order.id,
-                        bookingId: order.id,
-                        restaurantName: order.restaurantName
+                        restaurantId: order.id.toString(),
+                        restaurantName: order.restaurantName,
+                        restaurantImage: order.image || '',
+                        restaurantCuisine: order.cuisine || 'Restaurant',
+                        restaurantAddress: order.address || 'Address not available',
+                        restaurantTiming: order.duration || '15 min'
                       }
                     });
                   }}

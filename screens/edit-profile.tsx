@@ -36,6 +36,10 @@ function EditProfileScreen() {
   const [updateMessage, setUpdateMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
+    fetchProfile();
+  }, []);
+
+  useEffect(() => {
     if (authUser) {
       setFirstName(authUser.first_name || '');
       setLastName(authUser.last_name || '');
@@ -45,13 +49,24 @@ function EditProfileScreen() {
       setGender(authUser.gender || 'N');
       setProfileImage(authUser.profile_picture);
     }
-    fetchProfile();
   }, [authUser]);
 
   const fetchProfile = async () => {
     try {
+      setIsFetching(true);
+      const accessToken = await Storage.get('accessToken');
+      
+      if (!accessToken) {
+        throw new Error('No access token found');
+      }
+
       const { user } = await getProfile();
-      console.log('Profile data:', user);
+      
+      if (!user) {
+        throw new Error('No user data received');
+      }
+
+      console.log('Profile data loaded:', user);
       
       setFirstName(user.first_name || '');
       setLastName(user.last_name || '');
@@ -60,9 +75,13 @@ function EditProfileScreen() {
       setAboutMe(user.about_me || '');
       setGender(user.gender || 'N');
       setProfileImage(user.profile_picture);
+      
     } catch (error) {
       console.error('Error fetching profile:', error);
-      Alert.alert('Error', 'Failed to load profile data');
+      setUpdateMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Failed to load profile data'
+      });
     } finally {
       setIsFetching(false);
     }
@@ -73,36 +92,35 @@ function EditProfileScreen() {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
-        aspect: [4, 3],
-        quality: 1,
+        aspect: [1, 1],
+        quality: 0.8,
       });
 
       if (!result.canceled) {
         const imageUri = result.assets[0].uri;
         setNewImageUri(imageUri);
         
-        // Create profile update data
+        // Verify we have a valid access token
+        const accessToken = await Storage.get('accessToken');
+        if (!accessToken) {
+          throw new Error('No access token found');
+        }
+
         let updateData: UpdateProfileRequest;
         
         if (Platform.OS === 'web') {
           try {
             const response = await fetch(imageUri);
             const blob = await response.blob();
-            
-            // Create a File object with proper MIME type
             const file = new File([blob], 'profile.jpg', { 
               type: blob.type || 'image/jpeg'
             });
-            
-            updateData = {
-              profile_picture: file
-            };
+            updateData = { profile_picture: file };
           } catch (error) {
             console.error('Error creating file from blob:', error);
             throw new Error('Failed to process image for upload');
           }
         } else {
-          // For React Native, create FormData compatible object
           updateData = {
             profile_picture: {
               uri: imageUri,
@@ -112,33 +130,40 @@ function EditProfileScreen() {
           };
         }
 
-        try {
-          const { user } = await updateProfile(updateData);
-          
-          // Get the current tokens from storage
-          const currentAccessToken = await Storage.get('accessToken');
-          const currentRefreshToken = await Storage.get('refreshToken');
-
-          // Update auth context with new user data while preserving tokens
-          await signIn({
-            status: 'success',
-            user,
-            access: currentAccessToken || '',
-            refresh: currentRefreshToken || ''
-          });
-
-          setProfileImage(user.profile_picture);
-          setUpdateMessage({
-            type: 'success',
-            text: 'Profile picture updated successfully'
-          });
-        } catch (error) {
-          console.error('Profile picture update error:', error);
-          throw new Error(error instanceof Error ? error.message : 'Failed to update profile picture');
+        const { user } = await updateProfile(updateData);
+        
+        if (!user) {
+          throw new Error('No user data received from update');
         }
+
+        // Get the current tokens
+        const currentAccessToken = await Storage.get('accessToken');
+        const currentRefreshToken = await Storage.get('refreshToken');
+
+        if (!currentAccessToken || !currentRefreshToken) {
+          throw new Error('Authentication tokens not found');
+        }
+
+        // Update auth context with new user data
+        await signIn({
+          status: 'success',
+          user,
+          access: currentAccessToken,
+          refresh: currentRefreshToken
+        });
+
+        setProfileImage(user.profile_picture);
+        
+        // Refresh the profile data
+        await fetchProfile();
+
+        setUpdateMessage({
+          type: 'success',
+          text: 'Profile picture updated successfully'
+        });
       }
     } catch (error) {
-      console.error('Error picking image:', error);
+      console.error('Error updating profile picture:', error);
       setUpdateMessage({
         type: 'error',
         text: error instanceof Error ? error.message : 'Failed to update profile picture'
@@ -151,37 +176,48 @@ function EditProfileScreen() {
       setIsLoading(true);
       setUpdateMessage(null);
 
+      // Verify we have a valid access token
+      const accessToken = await Storage.get('accessToken');
+      if (!accessToken) {
+        throw new Error('No access token found');
+      }
+
       const updateData: UpdateProfileRequest = {
-        first_name: firstName || undefined,
-        last_name: lastName || undefined,
-        phone_number: phone || undefined,
-        about_me: aboutMe || undefined,
+        first_name: firstName.trim() || undefined,
+        last_name: lastName.trim() || undefined,
+        phone_number: phone.trim() || undefined,
+        about_me: aboutMe.trim() || undefined,
         gender: gender as 'M' | 'F' | 'O' | 'N'
       };
 
       const { user, message } = await updateProfile(updateData);
       
-      // Get the current tokens from storage
+      if (!user) {
+        throw new Error('No user data received from update');
+      }
+
+      // Get the current tokens
       const currentAccessToken = await Storage.get('accessToken');
       const currentRefreshToken = await Storage.get('refreshToken');
 
-      // Update the auth context with the new user data while preserving tokens
-      if (user) {
-        await signIn({
-          status: 'success',
-          user,
-          access: currentAccessToken || '',
-          refresh: currentRefreshToken || ''
-        });
+      if (!currentAccessToken || !currentRefreshToken) {
+        throw new Error('Authentication tokens not found');
       }
+
+      // Update the auth context with new user data
+      await signIn({
+        status: 'success',
+        user,
+        access: currentAccessToken,
+        refresh: currentRefreshToken
+      });
+
+      // Refresh the profile data
+      await fetchProfile();
 
       setUpdateMessage({
         type: 'success',
-        text: `${message || 'Profile updated successfully'}\n\nUpdated Details:\n` +
-          `• Name: ${user.first_name} ${user.last_name}\n` +
-          `• Phone: ${user.phone_number}\n` +
-          `• Gender: ${GENDER_OPTIONS.find(g => g.value === user.gender)?.label || 'Not specified'}\n` +
-          (user.about_me ? `• About Me has been updated` : '')
+        text: message || 'Profile updated successfully'
       });
 
     } catch (error) {

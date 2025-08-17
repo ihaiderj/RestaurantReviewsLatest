@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState } from 'react';
-import { DeepSeekService } from '@/services/deepseek';
+import { getDeepSeekResponse } from '@/services/deepseek';
 
 const { width } = Dimensions.get('window');
 
@@ -67,7 +67,7 @@ export default function ChatScreen() {
   const askDeepSeek = async () => {
     try {
       setIsLoading(true);
-      const result = await DeepSeekService.createChatCompletion([
+      const result = await getDeepSeekResponse([
         {
           role: 'user',
           content: 'What are some good restaurants in New York?'

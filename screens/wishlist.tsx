@@ -158,7 +158,10 @@ export default function WishlistScreen() {
           <TouchableOpacity 
             key={restaurant.id} 
             style={styles.restaurantCard}
-            onPress={() => router.push('/restaurant-profile')}
+            onPress={() => router.push({
+              pathname: '/(modals)/restaurant-profile/[id]',
+              params: { id: restaurant.id.toString() }
+            })}
             activeOpacity={0.7}
           >
             <View style={styles.imageContainer}>

@@ -4,8 +4,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
 import { useRouter } from 'expo-router';
 import { register } from '@/utils/api';
+import Constants from 'expo-constants';
 
 type UserType = 'CUSTOMER' | 'OWNER';
+
+// Get Google OAuth client IDs from app config
+const googleAndroidClientId = Constants.expoConfig?.extra?.googleAndroidClientId || '';
+const googleIosClientId = Constants.expoConfig?.extra?.googleIosClientId || '';
+const googleWebClientId = Constants.expoConfig?.extra?.googleWebClientId || '';
+const googleExpoClientId = Constants.expoConfig?.extra?.googleExpoClientId || '';
 
 export default function SignUpScreen() {
   const router = useRouter();

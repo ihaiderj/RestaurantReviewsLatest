@@ -16,6 +16,24 @@ export default function TabLayout() {
       headerShown: false,
       tabBarActiveTintColor: '#6B4EFF',
       tabBarInactiveTintColor: '#666',
+      tabBarStyle: {
+        backgroundColor: '#FFFFFF',
+        borderTopWidth: 1,
+        borderTopColor: 'rgba(0, 0, 0, 0.1)',
+        paddingBottom: 8,
+        paddingTop: 8,
+        height: 70,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: -2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 4,
+      },
+      tabBarLabelStyle: {
+        fontSize: 12,
+        fontWeight: '500',
+        marginTop: 4,
+      },
     }}>
       <Tabs.Screen
         name="index"
@@ -23,15 +41,6 @@ export default function TabLayout() {
           title: 'Home',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="home-outline" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="discover"
-        options={{
-          title: 'Discover',
-          tabBarIcon: ({ color, size }: TabIconProps) => (
-            <Ionicons name="compass-outline" size={size} color={color} />
           ),
         }}
       />
@@ -46,6 +55,16 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="review"
+        options={{
+          title: 'Reviews',
+          tabBarIcon: ({ color, size }: TabIconProps) => (
+            <Ionicons name="create-outline" size={size} color={color} />
+          ),
+          href: user ? undefined : '/(auth)/login',
+        }}
+      />
+      <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',
@@ -55,14 +74,11 @@ export default function TabLayout() {
           href: user ? undefined : '/(auth)/login',
         }}
       />
+      {/* Hide discover screen */}
       <Tabs.Screen
-        name="chat"
+        name="discover"
         options={{
-          title: 'Chat',
-          tabBarIcon: ({ color, size }: TabIconProps) => (
-            <Ionicons name="chatbubble-outline" size={size} color={color} />
-          ),
-          href: user ? undefined : '/(auth)/login',
+          href: null, // This hides the tab
         }}
       />
     </Tabs>

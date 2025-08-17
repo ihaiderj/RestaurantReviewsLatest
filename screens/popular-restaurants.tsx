@@ -1,4 +1,5 @@
 import { View, StyleSheet, ScrollView, TouchableOpacity, Image, Dimensions, TextInput } from 'react-native';
+import { OptimizedImage } from '@/components/images/OptimizedImage';
 import { ThemedText } from '@/components/ThemedText';
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
@@ -99,7 +100,10 @@ export default function PopularRestaurantsScreen() {
           <TouchableOpacity 
             key={restaurant.id}
             style={styles.restaurantCard}
-            onPress={() => router.push('/restaurant-profile')}
+            onPress={() => router.push({
+              pathname: '/(modals)/restaurant-profile/[id]',
+              params: { id: restaurant.id.toString() }
+            })}
             activeOpacity={0.7}
           >
             <Image 
